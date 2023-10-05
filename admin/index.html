@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Image Display</title>
+
+		<script src="htmx.min.js"></script>
+
+		<style>
+			body {
+				padding: 0;
+        margin: 0;
+			}
+
+			main {
+				max-width: 100%;
+				padding: 0.5rem;
+				display: grid;
+				gap: 0.5rem;
+			}
+
+			section {
+        max-width: 100%;
+				background-color: antiquewhite;
+				overflow: auto;
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				box-sizing: border-box;
+			}
+
+      #history {
+        /*padding: 1rem;*/
+      }
+
+      form, #history-content {
+        padding: 1rem;
+      }
+
+			form {
+				display: grid;
+			}
+
+      table, th, td {
+        border: 1px solid black;
+        border-collapse: collapse;
+      }
+
+      table {
+	      width: 100%;
+      }
+
+      #image-edit-form,
+      #texture-edit-form {
+        padding: 1rem;
+	      max-width: 20rem;
+      }
+
+      #image-edit-form > label,
+      #image-edit-form > fieldset,
+      #texture-edit-form > label,
+      #texture-edit-form > fieldset {
+	      display: grid;
+      }
+
+      #image-edit-progress,
+      #texture-edit-progress {
+        display: none;
+      }
+
+      #image-list,
+      #texture-list {
+	      background-color: rgba(51, 126, 126, 0.58);
+        padding: 1rem;
+        box-sizing: border-box;
+	      overflow-x: auto;
+	      display: flex;
+	      gap: 0.25rem;
+	      flex-wrap: wrap;
+	      min-width: 20rem;
+      }
+
+      #image-list img,
+      #texture-list img {
+	      max-height: 8rem;
+	      cursor: pointer;
+	      box-sizing: border-box;
+      }
+
+      #image-list img:target,
+      #texture-list img:target {
+          border: 0.25rem solid #c45e5e;
+      }
+
+      #image-list img.selected,
+      #texture-list img.selected {
+          border: 0.25rem solid royalblue;
+      }
+
+      #images {
+          max-height: 28.5rem;
+      }
+
+      #textures {
+          max-height: 18.5rem;
+      }
+
+      #history {
+	      display: block;
+      }
+		</style>
+	</head>
+
+	<body>
+		<header>
+
+		</header>
+
+		<main>
+			<section id="images">
+				<form  id="image-edit-form" hx-post="/upload/image" hx-encoding="multipart/form-data" hx-target="#image-list" hx-swap="afterbegin" hx-trigger="submit">
+					<strong>Images</strong> <br>
+
+					<label>
+						<i>Name&nbsp;</i> <input required type='text' id='name-id' name='name'>
+					</label> <br>
+
+					<fieldset>
+						<legend><i>Choose image file: </i></legend>
+
+						<label>
+							<input required type='file' id='blob-id' name='blob'>
+						</label>
+					</fieldset> <br>
+
+					<fieldset id="textures-checkbox-list" hx-get="/textures/list" hx-trigger="load" hx-target="this" hx-swap="innerHTML">
+						No textures to choose from
+					</fieldset> <br>
+
+					<button>
+						SAVE
+					</button>
+					<progress id="image-edit-progress"></progress>
+				</form>
+
+				<div id="image-list" hx-get="/images" hx-trigger="load"></div>
+			</section>
+
+			<section id="textures">
+				<form  id="texture-edit-form" hx-post="/upload/texture" hx-encoding="multipart/form-data" hx-target="#texture-list" hx-swap="afterbegin" hx-trigger="submit">
+					<strong>Textures</strong> <br>
+
+					<label>
+						<i>Name&nbsp;</i> <input type='text' id='name' name='name'>
+					</label> <br>
+
+					<fieldset>
+						<legend><i>Choose image file: </i></legend>
+
+						<label>
+							<input type='file' id='blob' name='blob' accept="image/*">
+						</label>
+					</fieldset> <br>
+
+					<fieldset>
+						<legend><i>Choose audio file: </i></legend>
+
+						<label>
+							<input type='file' id='audio_blob' name='audio_blob' accept="audio/*">
+						</label>
+					</fieldset> <br>
+
+					<button>
+						SAVE
+					</button>
+					<progress id="texture-edit-progress"></progress>
+				</form>
+
+				<div id="texture-list" hx-get="/textures" hx-trigger="load"></div>
+			</section>
+
+			<section id="history">
+				<div id="history-content">
+					<strong>History</strong> <br> <br>
+
+					<table>
+						<thead>
+							<tr>
+								<th> At </th>
+								<th> Textures Selected </th>
+								<th> Image Presented </th>
+							</tr>
+						</thead>
+
+						<tbody hx-get="/history" hx-swap="innerHTML" hx-trigger="load"></tbody>
+
+						<tfoot></tfoot>
+					</table>
+				</div>
+			</section>
+		</main>
+
+		<footer>
+
+		</footer>
+
+		<script>
+			let selectedImage = null;
+			let selectedTexture = null;
+
+			htmx.on("#image-edit-form", "htmx:afterRequest", (evt) => {
+				if (evt.target.id === "image-edit-form" && !evt.detail.failed) {
+					evt.target.reset();
+					selectedImage = null;
+
+					let formFileInputs = document.querySelectorAll("#image-edit-form input[type='file']");
+
+					formFileInputs.forEach(input => {
+						input.disabled = false;
+						input.required = true;
+					});
+				}
+			});
+
+			htmx.on("#texture-edit-form", "htmx:afterRequest", (evt) => {
+				if (evt.target.id === "texture-edit-form" && !evt.detail.failed) {
+					evt.target.reset();
+					selectedTexture = null;
+
+					let formFileInputs = document.querySelectorAll("#texture-edit-form input[type='file']");
+
+					formFileInputs.forEach(input => {
+						input.disabled = false;
+						input.required = true;
+					});
+				}
+			});
+
+			function handleImageClick(evt, image) {
+				let id = Number(image.getAttribute('data-id'));
+				let type = image.getAttribute('data-type');
+				let name = image.getAttribute('data-name');
+				let textures = image.getAttribute('data-textures')?.split(",");
+
+				let form = document.querySelector("#image-edit-form");
+				let formInputs = document.querySelectorAll("#image-edit-form input");
+
+				formInputs[1].value = '';
+
+				if (selectedImage !== null)  {
+					if (selectedImage[0] === id && selectedImage[1] === type) {
+						selectedImage = null
+
+						image.classList.remove("selected");
+
+						if (formInputs.length > 0) {
+							formInputs[0].value = "";
+							formInputs[1].disabled = false;
+							formInputs[1].required = true;
+
+							formInputs.forEach((input, index) => {
+								if (index > 1) input.checked = false;
+							});
+						}
+
+						form.removeAttribute("hx-patch");
+						form.setAttribute("hx-encoding", "multipart/form-data");
+						form.setAttribute("hx-post", "/upload/image");
+						form.setAttribute("hx-target", `#image-list`);
+						form.setAttribute("hx-swap", `afterbegin`);
+					} else {
+						const currentlyTouched = document.querySelector(`img[data-id="${selectedImage[0]}"][data-type="${selectedImage[1]}"]`);
+
+						currentlyTouched.classList.remove("selected");
+
+						selectedImage = [id, type];
+
+						image.classList.add("selected");
+
+						if (formInputs.length > 0) {
+							formInputs[0].value = name;
+							formInputs.forEach((input, index) => {
+								if (index > 1)
+									input.checked = !!textures?.includes(input.value);
+							});
+						}
+
+						form.setAttribute("hx-patch", `/patch/image/${id}`);
+						form.setAttribute("hx-target", `img[data-id="${selectedImage[0]}"][data-type="${selectedImage[1]}"]`);
+					}
+				} else {
+					selectedImage = [id, type];
+
+					image.classList.add("selected");
+
+					if (formInputs.length > 0) {
+						formInputs[0].value = name;
+						formInputs[1].disabled = true;
+						formInputs[1].required = false;
+						formInputs.forEach((input, index) => {
+							if (index > 1)
+								input.checked = !!textures?.includes(input.value);
+						});
+					}
+
+					form.removeAttribute("hx-post");
+					form.removeAttribute("hx-encoding");
+					form.setAttribute("hx-patch", `/patch/image/${id}`);
+					form.setAttribute("hx-target", `img[data-id="${selectedImage[0]}"][data-type="${selectedImage[1]}"]`);
+					form.setAttribute("hx-swap", `outerHTML`);
+				}
+
+				htmx.process(form);
+			}
+
+			function handleTextureClick(evt, image) {
+				let id = Number(image.getAttribute('data-id'));
+				let type = image.getAttribute('data-type');
+				let name = image.getAttribute('data-name');
+
+				let form = document.querySelector("#texture-edit-form");
+				let formInputs = document.querySelectorAll("#texture-edit-form input");
+
+				formInputs[1].value = '';
+
+				if (selectedTexture !== null)  {
+					if (selectedTexture[0] === id && selectedTexture[1] === type) {
+						selectedTexture = null
+
+						image.classList.remove("selected");
+
+						if (formInputs.length > 0) {
+							formInputs[0].value = "";
+							formInputs[1].disabled = false;
+							formInputs[1].required = true;
+						}
+
+						form.removeAttribute("hx-patch");
+						form.setAttribute("hx-encoding", "multipart/form-data");
+						form.setAttribute("hx-post", "/upload/image");
+						form.setAttribute("hx-target", `#texture-list`);
+						form.setAttribute("hx-swap", `afterbegin`);
+					} else {
+						const currentlyTouched = document.querySelector(`img[data-id="${selectedTexture[0]}"][data-type="${selectedTexture[1]}"]`);
+
+						currentlyTouched.classList.remove("selected");
+
+						selectedTexture = [id, type];
+
+						image.classList.add("selected");
+
+						if (formInputs.length > 0) {
+							formInputs[0].value = name;
+						}
+
+						form.setAttribute("hx-patch", `/patch/texture/${id}`);
+						form.setAttribute("hx-target", `img[data-id="${selectedTexture[0]}"][data-type="${selectedTexture[1]}"]`);
+					}
+				} else {
+					selectedTexture = [id, type];
+
+					image.classList.add("selected");
+
+					if (formInputs.length > 0) {
+						formInputs[0].value = name;
+						formInputs[1].disabled = true;
+						formInputs[1].required = false;
+					}
+
+					form.removeAttribute("hx-post");
+					form.removeAttribute("hx-encoding");
+					form.setAttribute("hx-patch", `/patch/texture/${id}`);
+					form.setAttribute("hx-target", `img[data-id="${selectedTexture[0]}"][data-type="${selectedTexture[1]}"]`);
+					form.setAttribute("hx-swap", `outerHTML`);
+				}
+
+				htmx.process(form);
+			}
+		</script>
+	</body>
+</html>
